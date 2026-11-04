@@ -2,7 +2,7 @@
 
 A Spring Boot learning project implementing a configurable HTTP gateway with an API management control plane, Basic-authenticated administration, Redis-backed request limiting, MySQL route persistence, and Kafka route-change events.
 
-> **Status:** Initial runnable backend implementation committed. This is a learning/MVP implementation, not a production-hardened gateway. The React UI, MongoDB analytics store, distributed gateway instances, JWT-based admin login, and automated integration tests remain future work. Review and test locally before using this project as evidence of production experience.
+> **Status:** Initial runnable backend implementation committed. This is a learning/MVP implementation, not a production-hardened gateway. The React route-management console is included. MongoDB analytics, distributed gateway instances, JWT-based admin login, and automated integration tests remain future work. Review and test locally before using this project as evidence of production experience.
 
 ## Architecture
 
@@ -75,7 +75,7 @@ curl http://localhost:8080/gateway/users/api/users \
 - Add request/response size limits, timeouts, retries, circuit breakers, structured audit logging and TLS.
 - The current rate limiter is a Redis fixed-window counter; it is not a token-bucket implementation.
 - Kafka events are emitted by the control plane; a distributed gateway consumer/cache refresh is not yet implemented.
-- No user-facing React application is included in this initial backend milestone.
+- The React admin console is available in `frontend/`; it currently uses HTTP Basic authentication and is intended for local development.
 
 ## Source and learning reference
 This implementation is independently written from the project topics described in the Coder Army GateKeeper series. It is not a copy of the instructor's members-only source code. Course: https://www.youtube.com/playlist?list=PLEYgx5hMdopw
