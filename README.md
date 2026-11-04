@@ -1,57 +1,84 @@
-# Gatekeeper — API Gateway & Microservices Platform
+# Gatekeeper — API Gateway & API Management
 
-> **Repository status: documentation scaffold.** This repository currently contains project documentation and structure placeholders, not a verified runnable implementation. Add and test the actual application source before describing it as complete.
+A Spring Boot learning project implementing a configurable HTTP gateway with an API management control plane, Basic-authenticated administration, Redis-backed request limiting, MySQL route persistence, and Kafka route-change events.
 
-## Overview
-Gatekeeper is a Spring Boot microservices project concept focused on centralized API routing, authentication and role-based authorization, caching, rate limiting, asynchronous messaging, and data persistence. The project scope described for this repository includes a React frontend and services using MySQL and MongoDB.
+> **Status:** Initial runnable backend implementation committed. This is a learning/MVP implementation, not a production-hardened gateway. The React UI, MongoDB analytics store, distributed gateway instances, JWT-based admin login, and automated integration tests remain future work. Review and test locally before using this project as evidence of production experience.
 
-## Planned capabilities
-- Centralized request routing through a custom API Gateway.
-- Authentication and role-based authorization with Spring Security.
-- Redis caching and rate limiting.
-- Asynchronous messaging and event processing with Apache Kafka.
-- Persistence using MySQL and MongoDB.
-- Request filters, interceptors, global exception handling, and AOP.
-- React-based frontend.
+## Architecture
 
-## Technology stack
-**Backend:** Java, Spring Boot, Spring Security  
-**Caching / messaging:** Redis, Apache Kafka  
-**Databases:** MySQL, MongoDB  
-**Frontend:** React
-
-## Repository structure
-```text
-gatekeeper-microservices/
-├── backend/                 # Add verified Spring Boot modules here
-├── frontend/                # Add the React application here
-├── docs/
-│   ├── architecture.md
-│   └── api-documentation.md
-└── .github/ISSUE_TEMPLATE/
+```mermaid
+flowchart LR
+  Client -->|X-Gateway-Key| Gateway[Spring Boot Gateway]
+  Admin[Admin / Basic Auth] --> Control[Route Management API]
+  Control --> MySQL[(MySQL)]
+  Control --> Kafka[(Kafka route events)]
+  Gateway --> Redis[(Redis rate counter)]
+  Gateway -->|dynamic route| Upstream[Configured API service]
 ```
 
-The current folders are documentation placeholders. Replace or extend them to match the actual service boundaries in the codebase.
+## Stack
+Java 21 · Spring Boot 3.4 · Spring Security · Spring Data JPA · MySQL · Redis · Apache Kafka · Maven · Docker Compose.
 
-## Documentation
-- [Architecture overview](docs/architecture.md)
-- [API documentation template](docs/api-documentation.md)
-- [Backend module notes](backend/README.md)
-- [Frontend notes](frontend/README.md)
+## Implemented
+- Admin CRUD for gateway routes at `/api/admin/routes`.
+- Spring Security HTTP Basic authentication for administration (configure credentials through environment variables).
+- Dynamic forwarding at `/gateway/{routeKey}/**` to the configured upstream URL.
+- Shared gateway-key check using `X-Gateway-Key`.
+- Per-route, per-client fixed-window request limiting using Redis.
+- Kafka event publication when routes are created, updated, or deleted.
+- Actuator health endpoint.
 
-## Setup
-Build and run instructions will be added after the real source code, dependency files, and configuration are committed. Do not assume this scaffold can currently be built or run.
+## Run locally
+Prerequisites: JDK 21, Maven 3.9+, Docker Desktop.
 
-## Security
-Never commit passwords, API keys, JWT secrets, database credentials, or production environment files. Use sanitized example configuration and document required environment variables without real values.
+```bash
+docker compose up -d
+mvn spring-boot:run
+```
 
-## Project checklist
-- [x] Repository documentation and structure scaffold
-- [ ] Add actual Spring Boot source code and verify module boundaries
-- [ ] Add actual React source code
-- [ ] Document verified API routes and sample requests
-- [ ] Add safe configuration examples and setup instructions
-- [ ] Add automated tests and CI
+Admin defaults are for local development only: username `admin`, password `change-me-now`. Override `APP_ADMIN_USER` and `APP_ADMIN_PASSWORD` before exposing the app. Set `GATEWAY_SHARED_KEY` to a long random secret.
 
-## Note
-Architecture and feature descriptions are planning documentation based on the project summary. They should be updated to reflect the implementation as it is built and verified.
+## API examples
+
+Create a route (admin Basic Auth):
+```bash
+curl -u admin:change-me-now -X POST http://localhost:8080/api/admin/routes \
+  -H "Content-Type: application/json" \
+  -d '{"routeKey":"users","targetUrl":"http://localhost:9001","active":true,"requestsPerMinute":60}'
+```
+
+List routes:
+```bash
+curl -u admin:change-me-now http://localhost:8080/api/admin/routes
+```
+
+Forward a request:
+```bash
+curl http://localhost:8080/gateway/users/api/users \
+  -H "X-Gateway-Key: local-demo-key"
+```
+
+## Configuration
+| Variable | Default | Purpose |
+|---|---|---|
+| APP_ADMIN_USER | admin | Admin username |
+| APP_ADMIN_PASSWORD | change-me-now | Local-only admin password |
+| GATEWAY_SHARED_KEY | local-demo-key | Gateway caller key |
+| DB_URL | jdbc:mysql://localhost:3306/gatekeeper?createDatabaseIfNotExist=true | MySQL JDBC URL |
+| DB_USER / DB_PASSWORD | root / root | MySQL credentials |
+| REDIS_HOST / REDIS_PORT | localhost / 6379 | Redis |
+| KAFKA_BOOTSTRAP_SERVERS | localhost:9092 | Kafka broker |
+
+## Security and limitations
+- Replace all demo credentials and shared keys before deployment.
+- Restrict upstream target URLs to trusted hosts and add SSRF protections before production use.
+- Add request/response size limits, timeouts, retries, circuit breakers, structured audit logging and TLS.
+- The current rate limiter is a Redis fixed-window counter; it is not a token-bucket implementation.
+- Kafka events are emitted by the control plane; a distributed gateway consumer/cache refresh is not yet implemented.
+- No user-facing React application is included in this initial backend milestone.
+
+## Source and learning reference
+This implementation is independently written from the project topics described in the Coder Army GateKeeper series. It is not a copy of the instructor's members-only source code. Course: https://www.youtube.com/playlist?list=PLEYgx5hMdopw
+
+## License
+MIT
