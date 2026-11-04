@@ -1,5 +1,13 @@
-# Frontend
+# Gatekeeper Admin Console
 
-Add the actual React application here, including `package.json`, source files, public assets, and tests.
+Vite + React dashboard for the Gatekeeper route-management API.
 
-Document the verified API base URL, authentication flow, and local development commands after checking the implementation. Do not commit `node_modules/`, environment secrets, or real credentials.
+## Run
+```bash
+npm install
+cp .env.example .env
+npm run dev
+```
+Open http://localhost:5173. Start the Spring Boot backend first. Default local demo credentials are admin / change-me-now; change them using APP_ADMIN_USER and APP_ADMIN_PASSWORD before exposing the backend. Configure GATEWAY_SHARED_KEY on the backend and send the same value in X-Gateway-Key for forwarded requests.
+
+The UI supports listing, creating, enabling/disabling and deleting routes. It is a development console, not a production admin portal.
