@@ -2,11 +2,11 @@ services:
   mysql:
     image: mysql:8.4
     environment:
-      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
       MYSQL_DATABASE: gatekeeper
     ports: ["3306:3306"]
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -proot --silent"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
       interval: 10s
       timeout: 5s
       retries: 15
@@ -54,13 +54,13 @@ services:
       SERVER_PORT: 8080
       DB_URL: jdbc:mysql://mysql:3306/gatekeeper
       DB_USER: root
-      DB_PASSWORD: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      APP_ADMIN_USER: admin
-      APP_ADMIN_PASSWORD: change-me-now
-      GATEWAY_SHARED_KEY: local-demo-key
+      APP_ADMIN_USER: ${APP_ADMIN_USER:-admin}
+      APP_ADMIN_PASSWORD: ${APP_ADMIN_PASSWORD:-change-me-now}
+      GATEWAY_SHARED_KEY: ${GATEWAY_SHARED_KEY:-local-demo-key}
     ports: ["8080:8080"]
     depends_on:
       mysql:
