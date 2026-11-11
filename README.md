@@ -1,84 +1,107 @@
 # Gatekeeper — API Gateway & API Management
 
-A Spring Boot learning project implementing a configurable HTTP gateway with an API management control plane, Basic-authenticated administration, Redis-backed request limiting, MySQL route persistence, and Kafka route-change events.
+A Java 21 / Spring Boot API gateway learning project with route administration, dynamic upstream forwarding, Redis token-bucket rate limiting, MySQL route persistence, and Kafka events.
 
-> **Status:** Initial runnable backend implementation committed. This is a learning/MVP implementation, not a production-hardened gateway. The React route-management console is included. MongoDB analytics, distributed gateway instances, JWT-based admin login, and automated integration tests remain future work. Review and test locally before using this project as evidence of production experience.
+> **Status:** Portfolio / learning project. It is not production-hardened. Upstream target allow-listing and SSRF protection, TLS, secret management, resilience policies, and deployment hardening remain necessary before production use.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  Client -->|X-Gateway-Key| Gateway[Spring Boot Gateway]
-  Admin[Admin / Basic Auth] --> Control[Route Management API]
-  Control --> MySQL[(MySQL)]
-  Control --> Kafka[(Kafka route events)]
-  Gateway --> Redis[(Redis rate counter)]
-  Gateway -->|dynamic route| Upstream[Configured API service]
+  Client[API Client] -->|X-Gateway-Key| Gateway[Spring Boot Gateway]
+  Admin[Admin Console] -->|HTTP Basic| AdminAPI[Route Management API]
+  AdminAPI --> MySQL[(MySQL)]
+  AdminAPI -->|route lifecycle events| Kafka[(Kafka)]
+  Gateway --> Redis[(Redis Lua Token Bucket)]
+  Gateway -->|HTTP request| Upstream[Configured Upstream]
+  Gateway -->|breach event| Kafka
 ```
 
-## Stack
-Java 21 · Spring Boot 3.4 · Spring Security · Spring Data JPA · MySQL · Redis · Apache Kafka · Maven · Docker Compose.
+## Technology
 
-## Implemented
-- Admin CRUD for gateway routes at `/api/admin/routes`.
-- Spring Security HTTP Basic authentication for administration (configure credentials through environment variables).
-- Dynamic forwarding at `/gateway/{routeKey}/**` to the configured upstream URL.
-- Shared gateway-key check using `X-Gateway-Key`.
-- Per-route, per-client fixed-window request limiting using Redis.
-- Kafka event publication when routes are created, updated, or deleted.
+Java 21 · Spring Boot 3.4 · Spring Security · Spring Data JPA · MySQL · Redis Lua · Apache Kafka · Maven · Docker · React · Vite.
+
+## Implemented features
+
+- Admin CRUD endpoints at /api/admin/routes.
+- HTTP Basic authentication for route administration.
+- Dynamic upstream forwarding at /gateway/{routeKey}/**.
+- Shared gateway-key validation through X-Gateway-Key.
+- Atomic Redis Lua token bucket with configurable capacity and continuous 60-second refill.
+- Kafka route lifecycle events and rate-limit breach events on gateway.rate-limit-events.
+- Upstream response status and end-to-end response headers are passed through, excluding hop-by-hop headers.
 - Actuator health endpoint.
+- Dockerfile and Docker Compose app + MySQL + Redis + Kafka.
+- Testcontainers integration tests for real Redis rate limiting and MySQL persistence.
 
-## Run locally
-Prerequisites: JDK 21, Maven 3.9+, Docker Desktop.
+## Run the complete stack
+
+Prerequisites: Docker Desktop with Compose.
+
+1. Set non-demo credentials in a private .env file before exposing the service.
+2. Build and start all services:
 
 ```bash
-docker compose up -d
-mvn spring-boot:run
+docker compose up --build
 ```
 
-Admin defaults are for local development only: username `admin`, password `change-me-now`. Override `APP_ADMIN_USER` and `APP_ADMIN_PASSWORD` before exposing the app. Set `GATEWAY_SHARED_KEY` to a long random secret.
+3. Check application health:
+
+```bash
+curl http://localhost:8080/actuator/health
+```
+
+The API is available at http://localhost:8080. Kafka is available to host tools at localhost:29092 and to Compose services at kafka:9092.
+
+### Environment variables
+
+| Variable | Default (local demo only) | Purpose |
+|---|---|---|
+| APP_ADMIN_USER | admin | Admin username |
+| APP_ADMIN_PASSWORD | change-me-now | Admin password |
+| GATEWAY_SHARED_KEY | local-demo-key | Gateway caller key |
+| DB_URL | Compose supplies MySQL URL | JDBC URL |
+| DB_USER / DB_PASSWORD | root / root | MySQL credentials |
+| REDIS_HOST / REDIS_PORT | redis / 6379 in Compose | Redis connection |
+| KAFKA_BOOTSTRAP_SERVERS | kafka:9092 in Compose | Kafka broker |
+
+Do not use demo credentials outside local development. Use a private .env file and never commit secrets.
 
 ## API examples
 
-Create a route (admin Basic Auth):
+Create an upstream route:
+
 ```bash
 curl -u admin:change-me-now -X POST http://localhost:8080/api/admin/routes \
   -H "Content-Type: application/json" \
-  -d '{"routeKey":"users","targetUrl":"http://localhost:9001","active":true,"requestsPerMinute":60}'
-```
-
-List routes:
-```bash
-curl -u admin:change-me-now http://localhost:8080/api/admin/routes
+  -d '{"routeKey":"users","targetUrl":"http://host.docker.internal:9001","active":true,"requestsPerMinute":60}'
 ```
 
 Forward a request:
+
 ```bash
 curl http://localhost:8080/gateway/users/api/users \
   -H "X-Gateway-Key: local-demo-key"
 ```
 
-## Configuration
-| Variable | Default | Purpose |
-|---|---|---|
-| APP_ADMIN_USER | admin | Admin username |
-| APP_ADMIN_PASSWORD | change-me-now | Local-only admin password |
-| GATEWAY_SHARED_KEY | local-demo-key | Gateway caller key |
-| DB_URL | jdbc:mysql://localhost:3306/gatekeeper?createDatabaseIfNotExist=true | MySQL JDBC URL |
-| DB_USER / DB_PASSWORD | root / root | MySQL credentials |
-| REDIS_HOST / REDIS_PORT | localhost / 6379 | Redis |
-| KAFKA_BOOTSTRAP_SERVERS | localhost:9092 | Kafka broker |
+## Run tests
 
-## Security and limitations
-- Replace all demo credentials and shared keys before deployment.
-- Restrict upstream target URLs to trusted hosts and add SSRF protections before production use.
-- Add request/response size limits, timeouts, retries, circuit breakers, structured audit logging and TLS.
-- The current rate limiter is a Redis fixed-window counter; it is not a token-bucket implementation.
-- Kafka events are emitted by the control plane; a distributed gateway consumer/cache refresh is not yet implemented.
-- The React admin console is available in `frontend/`; it currently uses HTTP Basic authentication and is intended for local development.
+Prerequisites: JDK 21, Maven 3.9+, and Docker available to Testcontainers.
 
-## Source and learning reference
-This implementation is independently written from the project topics described in the Coder Army GateKeeper series. It is not a copy of the instructor's members-only source code. Course: https://www.youtube.com/playlist?list=PLEYgx5hMdopw
+```bash
+mvn -B verify
+```
+
+The Testcontainers suite starts disposable MySQL and Redis containers and verifies persistence and token-bucket enforcement. GitHub Actions runs Maven verification and the frontend production build on pushes and pull requests.
+
+## Known limitations / next steps
+
+- Restrict upstream URLs to an explicit trusted-host allow-list; the current admin route URL can otherwise create SSRF risk.
+- Add outbound connection/read timeouts, payload limits, TLS, structured audit logs, and circuit breakers.
+- Rate-limit breach events are emitted to Kafka; a separate consumer/alerting workflow is not included yet.
+- The token bucket capacity is the configured requests-per-minute value and refills continuously over 60 seconds. It is not a fixed-window counter.
+- Configure production-grade credentials, secret storage, and database migrations before deployment.
 
 ## License
+
 MIT
